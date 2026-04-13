@@ -1,68 +1,110 @@
-use std::fs;
-use std::path::Path;
+use std::{fs, path::Path};
 
-const ZRAM_DEVICE_ADD_PATH: &str = "/sys/class/zram-control/hot_add";
-const ZRAM_DEVICE_REMOVE_PATH: &str = "/sys/class/zram-control/hot_remove";
+use crate::components::{ZramDevice, ZramSubSystem};
 
-#[derive(Default)]
-pub struct ZramSubSystem {
-    pub devices: Vec<ZramDevice>,
-}
+pub mod components;
 
-#[derive(Default)]
-pub struct ZramDevice {
-    pub id: u8,
-    pub is_active: bool,
-}
+const ZRAM_CONTROL_PATH_HOT_ADD: &str = "/sys/class/zram-control/hot_add";
+const ZRAM_CONTROL_PATH_HOT_REMOVE: &str = "/sys/class/zram-control/hot_remove";
+const ZRAM_DEVICE_PATH_PREFIX: &str = "/sys/block/";
 
-impl ZramDevice {
+impl ZramSubSystem<'_> {
     pub fn new() -> Self {
-        let zram_device_id = fs::read_to_string(Path::new(ZRAM_DEVICE_ADD_PATH))
-            .expect("Failed to open /sys/class/zram-control/hot_add")
-            .trim()
-            .parse::<u8>()
-            .expect("Failed to parse zram device id");
-
-        Self {
-            id: zram_device_id,
-            is_active: false,
-        }
-    }
-    pub fn remove(&self) {
-        fs::write(Path::new(ZRAM_DEVICE_REMOVE_PATH), self.id.to_string())
-            .expect("Failed to remove zram device");
-    }
-}
-
-impl ZramSubSystem {
-    pub fn new() -> Self {
-        Self {
+        ZramSubSystem {
             devices: Vec::new(),
         }
     }
-
     pub fn add_device(&mut self) {
-        let device = ZramDevice::new();
-        self.devices.push(device);
+        self.devices.push(ZramDevice::default());
     }
-    pub fn remove_device(&mut self, id: u8) {
-        self.devices.retain(|device| device.id != id);
-        fs::write(Path::new(ZRAM_DEVICE_REMOVE_PATH), id.to_string())
-            .expect("Failed to remove zram device");
+    pub fn add_device_with_size(&mut self, size: u32) {
+        self.devices.push(ZramDevice::with_size(size));
     }
-    pub fn remove_all_devices(&mut self) {
-        for device in &self.devices {
+    pub fn remove_device(&mut self, device: ZramDevice) {
+        if device.id < self.devices.len().try_into().unwrap() {
+            self.devices.remove(device.id.into());
             device.remove();
         }
-        self.devices.clear();
     }
     pub fn list_devices(&self) {
-        if self.devices.is_empty() {
-            println!("No zram devices found.");
-            return;
-        }
         for device in &self.devices {
-            println!("Zram device id: {}", device.id);
+            println!("Found zram device: {:?}", device);
+        }
+    }
+}
+
+impl Drop for ZramSubSystem<'_> {
+    fn drop(&mut self) {
+        for device in &mut self.devices {
+            device.remove();
+        }
+    }
+}
+
+impl ZramDevice<'_> {
+    pub fn new() -> Self {
+        let device_id = fs::read_to_string(ZRAM_CONTROL_PATH_HOT_ADD)
+            .expect("Failed to aquire zram device and corresponding id")
+            .trim()
+            .parse::<u8>()
+            .expect("Failed to parse device id");
+        let device_path = Path::new(ZRAM_DEVICE_PATH_PREFIX).join(format!("zram{device_id}"));
+        ZramDevice {
+            id: device_id,
+            path: device_path,
+            is_active: false,
+            algo: "zstd",
+            size: None,
+            mem_used: None,
+            mem_free: None,
+        }
+    }
+    pub fn with_size(size: u32) -> Self {
+        let device_id = fs::read_to_string(ZRAM_CONTROL_PATH_HOT_ADD)
+            .expect("Failed to aquire zram device and corresponding id")
+            .trim()
+            .parse::<u8>()
+            .expect("Failed to parse device id");
+        let device_path = Path::new(ZRAM_DEVICE_PATH_PREFIX).join(format!("zram{device_id}"));
+        let mut device_size = size.to_string();
+        
+        device_size.push('M');
+        
+        ZramDevice {
+            id: device_id,
+            path: device_path,
+            is_active: false,
+            algo: "zstd",
+            size: Some(device_size),
+            mem_used: None,
+            mem_free: None,
+        }
+    }
+    pub fn remove(&self) {
+        let id_str = self.id.to_string();
+        match fs::write(Path::new(ZRAM_CONTROL_PATH_HOT_REMOVE), id_str.as_bytes()) {
+            Err(e) => eprintln!("Could not remove device with id: '{}' at: {:?}. Error: {e}", self.id, self.path),
+            Ok(_) => println!("Device with id: '{}' at: {:?} sucessfully removed!", self.id, self.path),
+        };
+    }
+}
+
+impl Default for ZramDevice<'_> {
+    fn default() -> Self {
+        let device_id = fs::read_to_string(ZRAM_CONTROL_PATH_HOT_ADD)
+            .expect("Failed to aquire zram device and corresponding id")
+            .trim()
+            .parse::<u8>()
+            .expect("Failed to parse device id");
+        let device_path = Path::new(ZRAM_DEVICE_PATH_PREFIX).join(format!("zram{device_id}"));
+        ZramDevice {
+            id: device_id,
+            path: device_path,
+            is_active: false,
+            algo: "zstd",
+            size: Some(String::from("4096M")),
+            mem_used: None,
+            mem_free: None,
         }
     }
 }
