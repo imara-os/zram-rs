@@ -12,3 +12,9 @@ keywords = ["linux", "memory", "zram", "swap", "imara"]
 categories = ["os::linux-apis", "memory-management", "filesystem", "hardware-support"]
 
 [dependencies]
+nix = { version = "0.31.2", features = ["dir", "fs"] }
+thiserror = "2.0.18"
+
+[[bin]]
+name = "zram-bin"
+path = "bin/main.rs"
