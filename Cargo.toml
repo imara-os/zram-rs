@@ -1,6 +1,14 @@
 [package]
 name = "zram-rs"
-version = "0.1.0"
+version = "0.0.0-placeholder"
 edition = "2024"
+description = "High-level API for managing zram devices."
+authors = ["Luis Weitl"]
+readme = "README.md"
+repository = "https://github.com/imara-os/zram-rs"
+documentation = "https://docs.rs/zram-rs"
+license = "MIT OR Apache-2.0"
+keywords = ["linux", "memory", "zram", "swap", "imara"]
+categories = ["os::linux-apis", "memory-management", "filesystem", "hardware-support"]
 
 [dependencies]
