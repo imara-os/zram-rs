@@ -1,14 +1,16 @@
 use std::{fs, path::Path};
 
-use crate::components::{ZramDevice, ZramSubSystem};
+use crate::{algo::Algo, components::{ZramDevice, ZramSubSystem}};
 
+pub mod algo;
 pub mod components;
+pub mod error;
 
 const ZRAM_CONTROL_PATH_HOT_ADD: &str = "/sys/class/zram-control/hot_add";
 const ZRAM_CONTROL_PATH_HOT_REMOVE: &str = "/sys/class/zram-control/hot_remove";
 const ZRAM_DEVICE_PATH_PREFIX: &str = "/sys/block/";
 
-impl ZramSubSystem<'_> {
+impl ZramSubSystem {
     pub fn new() -> Self {
         ZramSubSystem {
             devices: Vec::new(),
@@ -26,14 +28,24 @@ impl ZramSubSystem<'_> {
             device.remove();
         }
     }
+    pub fn remove_device_with_id(&mut self, device_id: u8) {
+        if device_id < self.devices.len().try_into().unwrap() {
+             // let device = self.get_device_with_id(device_id);
+            self.get_device_with_id(device_id).unwrap().remove();
+            self.devices.remove(device_id.into());
+        }
+    }
     pub fn list_devices(&self) {
         for device in &self.devices {
             println!("Found zram device: {:?}", device);
         }
     }
+    pub fn get_device_with_id(&self, device_id: u8) -> Option<&ZramDevice> {
+        self.devices.get(device_id as usize)
+    }
 }
 
-impl Drop for ZramSubSystem<'_> {
+impl Drop for ZramSubSystem {
     fn drop(&mut self) {
         for device in &mut self.devices {
             device.remove();
@@ -41,7 +53,7 @@ impl Drop for ZramSubSystem<'_> {
     }
 }
 
-impl ZramDevice<'_> {
+impl ZramDevice {
     pub fn new() -> Self {
         let device_id = fs::read_to_string(ZRAM_CONTROL_PATH_HOT_ADD)
             .expect("Failed to aquire zram device and corresponding id")
@@ -53,7 +65,7 @@ impl ZramDevice<'_> {
             id: device_id,
             path: device_path,
             is_active: false,
-            algo: "zstd",
+            algo: Algo::Zstd,
             size: None,
             mem_used: None,
             mem_free: None,
@@ -74,7 +86,7 @@ impl ZramDevice<'_> {
             id: device_id,
             path: device_path,
             is_active: false,
-            algo: "zstd",
+            algo: Algo::Zstd,
             size: Some(device_size),
             mem_used: None,
             mem_free: None,
@@ -89,7 +101,7 @@ impl ZramDevice<'_> {
     }
 }
 
-impl Default for ZramDevice<'_> {
+impl Default for ZramDevice {
     fn default() -> Self {
         let device_id = fs::read_to_string(ZRAM_CONTROL_PATH_HOT_ADD)
             .expect("Failed to aquire zram device and corresponding id")
@@ -101,7 +113,7 @@ impl Default for ZramDevice<'_> {
             id: device_id,
             path: device_path,
             is_active: false,
-            algo: "zstd",
+            algo: Algo::Zstd,
             size: Some(String::from("4096M")),
             mem_used: None,
             mem_free: None,

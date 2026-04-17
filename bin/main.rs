@@ -3,8 +3,6 @@ use zram_rs::components::ZramSubSystem;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use ctrlc;
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let running = Arc::new(AtomicBool::new(true));
     let r = running.clone();
@@ -19,6 +17,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     zram_system.add_device();
     zram_system.add_device_with_size(1234);
     zram_system.list_devices();
+    
+    zram_system.remove_device_with_id(1);
     
     while running.load(Ordering::SeqCst) {
         std::thread::sleep(std::time::Duration::from_millis(100));
